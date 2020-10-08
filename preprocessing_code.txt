@@ -1,0 +1,243 @@
+# Loading libraries 
+library(arm) 
+library(ggplot2) 
+library(gridExtra) 
+library(car) 
+library(tidyr)
+library(dplyr)
+library(plyr)
+library(QuantPsyc)
+
+
+NS.data <- read.csv("NSdata.csv",header = T)
+summary(NS.data)
+
+# treating all negative values as missing for continuous predictors 
+for(i in c('W1GrssyrMP',
+           'W1depkids',
+           'W1ch0_2HH',
+           'W1ch3_11HH',
+           'W1ch12_15HH',
+           'W1ch16_17HH',
+           'W1GrssyrHH',
+           'W1NoldBroHS',
+           'W1yschat1',
+           'W4schatYP',
+           'W6DebtattYP',
+           'W8DINCW',
+           'W8DAGEYCH',
+           'W8GROW',
+           'W8NETW',
+           'W8PUSA',
+           'W8NETA',
+           'W8QDEB2') ){
+  na <- which(NS.data[,i] < 0)
+  NS.data[na,i] <- NA
+}
+
+
+# relabeling, merging binary categorical variables
+
+# W1wrk1aMP
+NS.data$W1wrk1aMP<- Recode(NS.data$W1wrk1aMP,"c(1,2,3,4)='working';c(5,6,7,8,9,10,11,12)='not working'; else=NA", as.factor = T)
+
+# W1condur5MP
+NS.data$W1condur5MP <- Recode(NS.data$W1condur5MP,"1='yes';2='no';else=NA", as.factor = T)
+
+# W1hea2MP
+NS.data$W1hea2MP <- Recode(NS.data$W1hea2MP,"1='yes';2='no';else=NA", as.factor = T)
+
+# W1InCarHH
+NS.data$W1InCarHH <- Recode(NS.data$W1InCarHH,"1='private HH';c(2,3,4)='not private HH';else=NA", as.factor = T)
+
+# W1hous12HH
+NS.data$W1hous12HH <- Recode(NS.data$W1hous12HH,"c(1,2,3)='owned property';c(4,5,6,7,8)='not owned property';else=NA", as.factor = T)
+
+# W1usevcHH
+NS.data$W1usevcHH <- Recode(NS.data$W1usevcHH,"1='yes';2='no';else=NA", as.factor = T)
+
+# W1hiqualdad
+NS.data$W1hiqualdad <-  Recode(NS.data$W1hiqualdad,"c(1,2,3)='HE';c(-999,-99,-94,-92,-91,-1)='na';-98='not present';else='not HE'", as.factor=T)
+
+# W1hiqualmum
+NS.data$W1hiqualmum <-  Recode(NS.data$W1hiqualmum,"c(1,2,3)='HE';c(-999,-99,-94,-92,-91,-1)='na';-98='not present';else='not HE'", as.factor=T)
+
+# W1wrkfulldad
+NS.data$W1wrkfulldad <-  Recode(NS.data$W1wrkfulldad,"1='full time';c(2,3)='not full time';-98='not present';else=NA", as.factor=T)
+
+# W1wrkfullmum
+NS.data$W1wrkfullmum <-  Recode(NS.data$W1wrkfullmum,"1='full time';2='part time';3='not working';-98='not present';else=NA", as.factor=T)
+
+# W1empsmum
+NS.data$W1empsmum <- Recode(NS.data$W1empsmum,"c(1,2)='working';c(-94,-999,-99)=NA;-98='not present';else='not working'",as.factor=T)
+
+# W1empsdad
+NS.data$W1empsdad <- Recode(NS.data$W1empsdad,"c(1,2)='working';c(-94,-999,-99)=NA;-98='not present';else='not working'",as.factor=T)
+
+# IndSchool
+NS.data$IndSchool <- Recode(NS.data$IndSchool,"0='maintained';1='independent'", as.factor=T)
+
+# W1marstatmum
+NS.data$W1marstatmum <- Recode(NS.data$W1marstatmum,"c(1,2,3)='married or living with partner';-98='not present';c(4,5,6,7)='currently no partner'; else=NA", as.factor=T)
+
+# W1famtyp2
+NS.data$W1famtyp2 <- Recode(NS.data$W1famtyp2,"1='single parent';c(0,2)='not single parent';else=NA", as.factor=T)
+
+# W1nssecfam
+NS.data$W1nssecfam <- Recode(NS.data$W1nssecfam,"c(1,2,4)='managerial professional';c(3,5,6,7,8)='not managerial professional';else=NA", as.factor=T)
+NS.data$W1nssecfam <-relevel(NS.data$W1nssecfam, ref = "not managerial professional")
+
+# W1ethgrpYP
+NS.data$W1ethgrpYP <- Recode(NS.data$W1ethgrpYP,"1='White';c(2,8)='Mixed and others'; c(3,4,5)='South Asian'; c(6,7)='Black';else=NA", as.factor=T)
+NS.data$W1ethgrpYP <- relevel(NS.data$W1ethgrpYP, ref = "White")
+
+# W1heposs9YP
+NS.data$W1heposs9YP <- Recode(NS.data$W1heposs9YP,"c(1,2)='likely';c(-1,3,4)='unlikely'; else=NA", as.factor=T)
+
+# W1hwndayYP
+NS.data$W1hwndayYP <- Recode(NS.data$W1hwndayYP,"c(4,5)='four evenings or more';c(0,1,2,3)='less than four evenings'; else=NA", as.factor=T)
+
+# W1truantYP
+NS.data$W1truantYP <- Recode(NS.data$W1truantYP,"1='yes';2='no';-97='refused CASI'; else=NA", as.factor=T)
+NS.data$W1truantYP <- relevel(NS.data$W1truantYP, ref = 'no' )
+
+# W1alceverYP
+NS.data$W1alceverYP <- Recode(NS.data$W1alceverYP,"1='yes';2='no';-97='refused CASI'; else=NA", as.factor=T)
+NS.data$W1alceverYP <- relevel(NS.data$W1alceverYP, ref = 'no' )
+
+# W1bulrc
+NS.data$W1bulrc <- Recode(NS.data$W1bulrc,"1='yes';2='no';-97='refused CASI'; else=NA", as.factor=T)
+NS.data$W1bulrc <- relevel(NS.data$W1bulrc, ref = 'no' )
+
+# W1disabYP
+NS.data$W1disabYP <- Recode(NS.data$W1disabYP,"1='schooling affected';c(2,3)='none or schooling not affected';else=NA", as.factor=T)
+
+# W2ghq12scr 
+NS.data$W2ghq12scr <- Recode(NS.data$W2ghq12scr,"c(4,5,6,7,8,9,10,11,12)='psychological distress';c(0,1,2,3)='no psychological distress';-97='refused CASI';else=NA", as.factor=T)
+
+# W2disc1YP
+NS.data$W2disc1YP <- Recode(NS.data$W2disc1YP,"1='yes';2='no';-97='refused CASI'; else=NA", as.factor=T)
+
+# W2depressYP
+NS.data$W2depressYP <- Recode(NS.data$W2depressYP,"c(3,4)='yes';c(1,2)='no';-97='refused CASI'; else=NA", as.factor=T)
+
+# W4AlcFreqYP
+NS.data$W4AlcFreqYP <- Recode(NS.data$W4AlcFreqYP,"c(1,2)='once a week or more';c(3,4,5,6)='less than once a week';-97='refused CASI'; else=NA", as.factor=T)
+
+# W4CannTryYP
+NS.data$W4CannTryYP <- Recode(NS.data$W4CannTryYP,"1='yes';2='no'; else=NA", as.factor=T)
+
+# W4NamesYP
+NS.data$W4NamesYP <- Recode(NS.data$W4NamesYP,"1='yes';2='no';-97='refused CASI'; else=NA", as.factor=T)
+
+# W4RacismYP
+NS.data$W4RacismYP <- Recode(NS.data$W4RacismYP,"1='yes';2='no';-97='refused CASI'; else=NA", as.factor=T)
+
+# W4empsYP
+NS.data$W4empsYP <- Recode(NS.data$W4empsYP,"c(1,2)='working';c(3,4,5,6,7,8,9)='not working';else=NA", as.factor=T)
+
+# W4Childck1YP
+NS.data$W4Childck1YP <- Recode(NS.data$W4Childck1YP,"1='yes';2='no';else=NA", as.factor=T)
+
+# W5JobYP
+NS.data$W5JobYP <- Recode(NS.data$W5JobYP,"1='yes';2='no';else='na'", as.factor=T)
+
+# W5EducYP
+NS.data$W5EducYP <- Recode(NS.data$W5EducYP,"1='yes';2='no';else='na'", as.factor=T)
+
+# W5Apprent1YP
+NS.data$W5Apprent1YP <- Recode(NS.data$W5Apprent1YP,"1='yes';2='no';else='na'", as.factor=T)
+
+# W6JobYP
+NS.data$W6JobYP <- Recode(NS.data$W6JobYP,"1='yes';2='no';else='na'", as.factor=T)
+
+# W6UnivYP
+NS.data$W6UnivYP <- Recode(NS.data$W6UnivYP,"1='yes';2='no';else=NA", as.factor=T)
+
+# W6EducYP
+NS.data$W6EducYP <- Recode(NS.data$W6EducYP,"1='yes';2='no';else='na'", as.factor=T)
+
+# W6Apprent1YP
+NS.data$W6Apprent1YP <- Recode(NS.data$W6Apprent1YP,"1='yes';2='no';else='na'", as.factor=T)
+
+# W6acqno
+NS.data$W6acqno <- Recode(NS.data$W6acqno,"9='no academic study aim';c(7,8)=NA;else='some qualification'", as.factor=T)
+
+# W6gcse
+NS.data$W6gcse <- Recode(NS.data$W6gcse,"4='4';c(-1,-91)=NA;else='<4'", as.factor=T)
+
+# W6als
+NS.data$W6als <- Recode(NS.data$W6als,"4='4';c(-1,-91)=NA;else='<4'", as.factor=T)
+
+# W6OwnchiDV
+NS.data$W6OwnchiDV <- Recode(NS.data$W6OwnchiDV,"1='yes';2='no';else=NA", as.factor=T)
+
+# W6Childliv
+NS.data$W6Childliv <- Recode(NS.data$W6Childliv,"1='yes';2='no';else=NA", as.factor=T)
+
+# W6NEETAct
+NS.data$W6NEETAct <- Recode(NS.data$W6NEETAct,"1='looking for paid work';c(2,3)='not looking for paid work';else=NA", as.factor=T)
+
+#W8DDEGP 
+NS.data$W8DDEGP <- Recode(NS.data$W8DDEGP, "1='HE degree'; 0='no HE degree'; else=NA", as.factor=T)
+NS.data$W8DDEGP <- relevel(NS.data$W8DDEGP, ref ='no HE degree')
+
+# W8DGHQSC_binary
+NS.data$W8DGHQSC_binary <- Recode(NS.data$W8DGHQSC,"c(4,5,6,7,8,9,10,11,12)='psychological distress';c(0,1,2,3)='no psychological distress';-9='refused';else=NA", as.factor=T)
+NS.data$W8DGHQSC_binary <- ifelse(NS.data$W8DGHQSC < 0,NA,NS.data$W8DGHQSC)
+
+# W8DMARSTAT
+NS.data$W8DMARSTAT <- Recode(NS.data$W8DMARSTAT,"c(2,3,6,7)='legally partnered';c(-1,-8,-9)=NA;else='not partnered'", as.factor=T)
+NS.data$W8DMARSTAT <- relevel(NS.data$W8DMARSTAT, ref = 'not partnered')
+
+# W8DACTIVITYC
+NS.data$W8DACTIVITYC <- Recode(NS.data$W8DACTIVITYC,"c(1,2,3,6,7)='in work or training';c(-1,-8,-9)=NA;else='other activity'", as.factor=T)
+
+# W8DWRK
+NS.data$W8DWRK <- Recode(NS.data$W8DWRK,"1='employed';2='unemployed';else=NA", as.factor=T)
+NS.data$W8DWRK <- relevel(NS.data$W8DWRK, ref = 'unemployed')
+
+# W8CMSEX
+NS.data$W8CMSEX <- Recode(NS.data$W8CMSEX,"1='male';2='female';else=NA", as.factor=T)
+
+# W8TENURE
+NS.data$W8TENURE <- Recode(NS.data$W8TENURE,"c(1,2,3)='owned property';c(4,5,6,7,8)='not owned property';else=NA", as.factor=T)
+
+# W8DACTIVITY
+NS.data$W8DACTIVITY <- Recode(NS.data$W8DACTIVITY,"c(1,2,3,8,11,12)='in work or training';c(-1,-8,-9)=NA;else='other activity'", as.factor=T)
+NS.data$W8DACTIVITY <- relevel(NS.data$W8DACTIVITY, ref = 'other activity')
+
+# W8QMAFI
+NS.data$W8QMAFI <- Recode(NS.data$W8QMAFI,"c(1,2)='managing well';c(3,4,5)='struggling';else=NA", as.factor=T)
+
+# merging W5JobYP and W6JobYP in a new column
+NS.data$JobW5orW6 <- with(NS.data, JobW5orW6 <- ifelse(
+  (W5JobYP=='yes')|(W6JobYP=='yes'),'yes',ifelse(
+    (W5JobYP=='no')|(W6JobYP=='no'),'no',NA)))
+NS.data$JobW5orW6 <- as.factor(NS.data$JobW5orW6)
+
+# merging W5EducYP and W6EducYP into a new column
+NS.data$EducW5orW6 <- with(NS.data, EducW5orW6 <- ifelse(
+  (W5EducYP=='yes')|(W6EducYP=='yes'),'yes',ifelse(
+    (W5EducYP=='no')|(W6EducYP=='no'),'no',NA)))
+NS.data$EducW5orW6 <- as.factor(NS.data$EducW5orW6)
+
+# merging W5Apprent1YP and W6Apprent1YP into a new column
+NS.data$ApprentW5orW6 <- with(NS.data, ApprentW5orW6 <- ifelse(
+  (W5Apprent1YP=='yes')|(W6Apprent1YP=='yes'),'yes',ifelse(
+    (W5Apprent1YP=='no')|(W6Apprent1YP=='no'),'no',NA)))
+NS.data$ApprentW5orW6 <- as.factor(NS.data$ApprentW5orW6)
+
+# creating a column with highest level of parental qualification
+NS.data$HighestParQual <- with(NS.data, HighestParQual <- ifelse(
+  (W1hiqualmum=='HE')|(W1hiqualdad=='HE'),'HE',ifelse(
+    (W1hiqualmum=='not HE')|(W1hiqualdad=='not HE'),'not HE',NA)))
+NS.data$HighestParQual <- as.factor(NS.data$HighestParQual)
+
+# Number of missing values per column
+for(i in names(NS.data)){
+  l <- length(which(is.na(NS.data[,i])))
+  cat(paste("No. of NAs in", i, "=", l, "\n"))
+}
+
+data.processed <- NS.data

@@ -1,0 +1,266 @@
+# W8DWRK logistic model 
+
+# run preprocessing code beforehand 
+
+data <- data.processed
+
+# ## EXPLORATORY ANALYSIS
+# 
+# # write function that plots all features and produces a list
+# data.processed$W8DWRK <- relevel(data.processed$W8DWRK, ref = 'unemployed')
+# exploratory_plots <- function(dt_frm){
+#   col_name <- names(dt_frm)[-1] 
+#   graph_ls <- list()
+#   for (column_name in col_name){
+#     if (sapply(dt_frm, class)[column_name] == 'factor'){
+#       p <- ggplot(data = dt_frm, aes_string(x=column_name, fill = 'W8DWRK')) + geom_bar(position = "fill") + 
+#         scale_y_continuous(name = "Within group Percentage",labels = scales::percent)
+#       graph_ls[[column_name]] <- p
+#     }else if (sapply(dt_frm, class)[column_name] == 'integer'){
+#       p <- ggplot(data = dt_frm, aes_string(x='W8DWRK', y=column_name)) + geom_boxplot() +
+#         coord_flip()
+#       graph_ls[[column_name]] <- p
+#     }else{
+#       p <- ggplot(data = dt_frm, aes_string(x='W8DWRK', y=column_name)) + geom_boxplot() +
+#         coord_flip()
+#       graph_ls[[column_name]] <- p
+#     }
+#   }
+#   return(graph_ls) }
+# 
+# 
+# # write function that returns grid with 4 plots 
+# set_plot <- function(plot_ls, start_n = 1){
+#   number_plot <- min(4, 1+length(plot_ls)-start_n) 
+#   if (number_plot == 4){
+#     grid.arrange(plot_ls[[start_n]], plot_ls[[start_n+1]], plot_ls[[start_n+2]], plot_ls[[start_n+3]], nrow=2) 
+#   }
+#   else if (number_plot == 3){
+#     grid.arrange(plot_ls[[start_n]], plot_ls[[start_n+1]], plot_ls[[start_n+2]], nrow=2) 
+#   }
+#   else if (number_plot == 2){
+#     grid.arrange(plot_ls[[start_n]], plot_ls[[start_n+1]], nrow=1) 
+#   }
+#   else if (number_plot ==1){
+#     grid.arrange(plot_ls[[start_n]], nrow=2) 
+#   }
+#   else{print('start_n is over the length of input list') 
+#   }
+# }
+# # produce plots
+# ls <- exploratory_plots(data)
+# for (i in seq(1,80,by=4)){
+#   set_plot(ls, i) 
+# }
+
+## FROM INITIAL TO FINAL MODEL
+
+summary(data$W8DWRK)
+
+# transform outcome into 1s (successes) and 0s (failures)
+data$W8DWRK <- Recode(data$W8DWRK,"'employed'=1;'unemployed'=0;else=NA", as.factor=F)
+
+summary(data$W8DWRK)
+
+dim(data[is.na(data$W8DWRK),])
+
+# remove NAs in outcome
+data.0 <- data[!is.na(data$W8DWRK),]
+
+# recode W1ethgrpYP into a binary variable as boxplot suggests discrepancy between white and other groups
+data$W1ethgrpYP <- with(data,Recode(W1ethgrpYP, "'White'='White';NA=NA;else='non white'"))
+
+# subset columns of interest (rationale given by exploratory analysis)
+data.1 <- select(data.0,c(W8DWRK,W1GrssyrHH,IndSchool,W1famtyp2,W1nssecfam,
+                   W1truantYP,W1disabYP,W2ghq12scr,W2disc1YP,
+                   W4schatYP,W6UnivYP,W6gcse,W6als,W6OwnchiDV,W8DINCW,
+                   W8DDEGP,W8DGHQSC,W8DMARSTAT,W8CMSEX,W8TENURE,
+                   W8QMAFI,W1ethgrpYP,JobW5orW6,EducW5orW6,
+                   HighestParQual))
+head(data.1)
+str(data.1)
+
+#initial model
+glm.1 <- glm(W8DWRK~., data.1, family = binomial(link = "logit"))
+display(glm.1)
+
+summary(glm.1)
+
+# manual backward selection 
+data.2 <- select(data.1,-c(W2disc1YP,W1truantYP,HighestParQual,W8DINCW,
+                          W6gcse,EducW5orW6,W2ghq12scr,IndSchool,W1famtyp2,
+                          W8DDEGP,W1nssecfam))
+dim(data.2)
+
+# take complete case
+data.complete <- data.2[complete.cases(data.2),]
+dim(data.complete) # lost approx. 3000 observations, 2802 left
+
+glm.intermediate <- glm(W8DWRK~.,data.complete,family = binomial(link="logit"))
+summary(glm.intermediate)
+display(glm.intermediate)
+
+# remove W1ethgrpYP
+data.final <- select(data.complete, -W1ethgrpYP)
+
+# take log of W1GrssyrHH as coefficient is 0
+data.final$log_W1GrssyrHH <- log(data.final$W1GrssyrHH) # for coefficient to be different from 0
+data.final <- select(data.final,-W1GrssyrHH)
+
+# advanced models 
+glm.advanced.1  <- glm(W8DWRK~.,data.final,family = binomial(link="logit"))
+summary(glm.advanced.1)
+display(glm.advanced.1)
+qchisq(0.95,12) #difference between null and residual deviance above critical value of chisq so better than null model 
+
+
+glm.advanced.2  <- glm(W8DWRK~.-log_W1GrssyrHH,data.final,family = binomial(link="logit"))
+summary(glm.advanced.2)
+display(glm.advanced.2)
+qchisq(0.95,11) #difference between null and residual deviance above critical value of chisq so better than null model 
+
+
+#  models are nested so we can compare them with deviance analysis
+anova(glm.advanced.1,glm.advanced.2, test="Chisq") # not significant at 5%
+
+data.final <- select(data.final, -log_W1GrssyrHH)
+
+# interaction between sex and parenting 
+glm.int <- glm(W8DWRK~.+W8CMSEX*W6OwnchiDV,data.final,family = binomial(link="logit"))
+display(glm.int)
+summary(glm.int)
+vif(glm.int) 
+qchisq(0.95,12)
+
+anova(glm.int,glm.advanced.2,test="Chisq")
+
+# # try to center schat on mean to get baseline 
+# mean(data.final$W4schatYP)
+# which(data.final$W4schatYP==0)
+# data.final$W4schatYP <- data.final$W4schatYP - mean(data.final$W4schatYP)
+
+# outlier analysis was tried using Cook distance only. No values above 1. 
+
+# final model 
+glm.final <- glm.int
+display(glm.final)
+coef <- glm.final$coefficients
+eqn <- paste("E(W8DINCW) =", paste(round(coef[1],2), paste(round(coef[-1],2), names(coef[-1]), sep=" * ", collapse=" + "), sep=" + "))
+eqn <- gsub('\\+ -', '- ', gsub(' \\* ', '*', eqn))
+eqn
+
+# obtaining odds ratios 
+exp(coef(glm.final))
+
+
+# classification table - predictive ability of the model 
+#function
+ct.op<-function(predicted,observed){ #arguments
+  #create the data frame  
+  df.op<-data.frame(predicted=predicted,observed=observed)
+  #create a table 
+  op.tab<-table(df.op)
+  #use the prop.table function to obtain the proportions we need:
+  #those who were correctly predicted as 0 
+  #@position 1,1 in the table of proportions
+  obs0.tab<-round(prop.table(op.tab,2)[1,1],2)
+  #those who were correctly predicted as 1
+  #@position 2,2 in the table of proportions
+  obs1.tab<-round(prop.table(op.tab,2)[2,2],2)
+  #and put them under the table 
+  op.tab<-rbind(op.tab,c(obs0.tab,obs1.tab))
+  #name the rows
+  rownames(op.tab)<-c("pred=0","pred=1","%corr")
+  #name the columns
+  colnames(op.tab)<-c("obs=0","obs=1")
+  #return the table
+  op.tab
+}
+
+# find optimal cutoff value
+library(InformationValue)
+predicted <- as.numeric(glm.final$fitted.values)
+optCutOff <- optimalCutoff(data.final$W8DWRK, predicted)[1] 
+optCutOff
+
+#classification table
+pred.glm.final <- as.numeric(glm.final$fitted.values>optCutOff)
+ct.op(pred.glm.final,data.final$W8DWRK) # 10% 0s correctly predicted, 0.99% 1s correctly pr, 87% overall
+# if unemplyoyment was a disease to detect, we would get a high rate of Type II error, ie false negatives.
+# model isn't good at predicting
+
+# higher cutoff value yields more balanced results 
+pred.glm.finalbis <- as.numeric(glm.final$fitted.values>0.85)
+ct.op(pred.glm.finalbis,data.final$W8DWRK)
+
+
+# apc for continuous predictors 
+# interpret as "the average predicitve probability of being employed increase/decreases
+# by 'apc' over the range of 'variable' "
+glm.apc <- glm(W8DWRK~W4schatYP+W8DGHQSC, data.final, family = binomial) 
+b<- coef(glm.apc)
+b
+
+# for W4schatYP
+hi <- 20
+lo <- 0
+delta.W4schatYP <- with(data.final, (invlogit(b[1]+b[2]*hi+b[3]*W8DGHQSC)
+                                      -invlogit(b[1]+b[2]*lo+b[3]*W8DGHQSC)))
+print(mean(delta.W4schatYP))              
+
+# for W8DGHQSC
+hi <- 12
+lo <- 0
+delta.W8DGHQSC <- with(data.final, (invlogit(b[1]+b[2]*W4schatYP+b[3]*hi)
+                                     -invlogit(b[1]+b[2]*W4schatYP+b[3]*lo)))
+print(mean(delta.W8DGHQSC))    
+
+## risk ratios 
+new.data <- data.frame(W8DGHQSC=c(0,3,6,9,12),W4schatYP=mean(data.final$W4schatYP)) 
+# pred.logit
+pred.logit <- predict(glm.apc,new.data)
+pred.probs <- invlogit(pred.logit)
+logreg<-data.frame(logits=pred.logit,probs=pred.probs) 
+round(cbind(new.data,logreg),digits = 2)
+
+print("risk ratio GHQ:0-3, mean W4schat")
+as.numeric(pred.probs[2]/pred.probs[1])
+print("risk ratio GHQ:3-6, mean W4schat")
+as.numeric(pred.probs[3]/pred.probs[2])
+print("risk ratio GHQ:6-9, mean W4schat")
+as.numeric(pred.probs[4]/pred.probs[3])
+print("risk ratio GHQ:9-12, mean W4schat") 
+as.numeric(pred.probs[5]/pred.probs[4])
+  
+## ------------For the logistic plot------------------------------------------------------------
+#create a new data frame (icu.breaks)
+#which adds a column to icu.dat using the mutate function in "dplyr".
+#It has bins of 5 years starting at 15 and ending at 95
+dat.breaks<-mutate(data.final,bin=cut(W8DGHQSC, breaks=13))
+
+#estimate the proportion of people that survived the ICU in each bin (y-axis)
+prop <- prop.table(with(dat.breaks, table(W8DWRK,bin)),2)[2,]
+# the midpoint of each bin (x-axis)
+midbin<- seq(0, 12, by=1)
+#create a new data frame using these two variables
+dat.bin<-data.frame(midbin,prop)
+#icu.bin
+
+## ----the logistic plot----
+#basic plot
+p5<- ggplot(dat.breaks,aes(x=W8DGHQSC,y=W8DWRK))
+# geom_count is a type of point that takes into account how frequent that value is
+# it plots the Employed/Unemployed
+p5<-p5+ geom_count()+
+  theme_minimal()
+#adds the logistic regression line of best fit
+p5<-p5+ geom_smooth(method = "glm", method.args = list(family = "binomial"),se = FALSE)
+#plots the points corresponding to the proportions
+p5<-p5+ geom_point(data=dat.bin, aes(x=midbin,y=prop),shape=2,color="red", size=2) + theme_bw()
+p5 <- p5 + labs(title="Health and access to work",
+                x="General Health Questionnaire score",
+                y="Probability of being employed") +
+  theme(plot.title = element_text(size = 12, face = "bold"))
+p5
+
+

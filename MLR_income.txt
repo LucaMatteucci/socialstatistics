@@ -1,0 +1,272 @@
+# W8DINCW Regression
+
+# run preprocessing code beforehand 
+
+data <- data.processed
+
+# EXPLORATORY ANALYSIS
+# # write function that plots all features and produces a list
+# exploratory_plots <- function(dt_frm){
+#   col_name <- names(dt_frm)[-1] 
+#   graph_ls <- list()
+#   for (column_name in col_name){
+#     if (sapply(dt_frm, class)[column_name] == 'factor'){
+#       p <- ggplot(data = dt_frm, aes_string(x=column_name, y='W8DINCW')) + geom_boxplot() 
+#       graph_ls[[column_name]] <- p
+#     }else if (sapply(dt_frm, class)[column_name] == 'integer'){
+#       p <- ggplot(data = dt_frm, aes_string(x=column_name, y='W8DINCW')) + geom_point() + geom_smooth(method='lm') 
+#       graph_ls[[column_name]] <- p
+#     }else{
+#       p <- ggplot(data = dt_frm, aes_string(x=column_name, y='W8DINCW')) + geom_point() + geom_smooth(method='lm') 
+#       graph_ls[[column_name]] <- p
+#     }
+#   }
+#   return(graph_ls) }
+# 
+# 
+# # write function that returns grid with 4 plots 
+# set_plot <- function(plot_ls, start_n = 1){
+#   number_plot <- min(4, 1+length(plot_ls)-start_n) 
+#   if (number_plot == 4){
+#     grid.arrange(plot_ls[[start_n]], plot_ls[[start_n+1]], plot_ls[[start_n+2]], plot_ls[[start_n+3]], nrow=2) 
+#   }
+#   else if (number_plot == 3){
+#     grid.arrange(plot_ls[[start_n]], plot_ls[[start_n+1]], plot_ls[[start_n+2]], nrow=2) 
+#   }
+#   else if (number_plot == 2){
+#     grid.arrange(plot_ls[[start_n]], plot_ls[[start_n+1]], nrow=1) 
+#   }
+#   else if (number_plot ==1){
+#     grid.arrange(plot_ls[[start_n]], nrow=2) 
+#   }
+#   else{print('start_n is over the length of input list') 
+#   }
+# }
+# 
+# # produce plots
+# ls <- exploratory_plots(data)
+# for (i in seq(1,80,by=4)){
+#   set_plot(ls, i) 
+# }
+# 
+# #interactions
+# ggplot(data, aes(x=W8DDEGP, y=W8DINCW, fill=W8CMSEX)) + geom_boxplot() + theme_bw()
+# ggplot(data, aes(x=W8DDEGP, y=W8DINCW, fill=W1ethgrpYP)) + geom_boxplot() + theme_bw()
+
+
+summary(data$W8DINCW)
+
+# remove unwanted predictors 
+data <- select(data, -c(NSID,W8GROW,W8NETA,W8NETW,))
+which(colSums(is.na(data)) > 0.72*nrow(data))
+data <- data[, which(colSums(is.na(data)) < 0.72*nrow(data))]
+
+# # loop with univariate regressions
+# varlist <- names(data)
+# models <- lapply(varlist, function(x) {
+#   lm(substitute(W8DINCW ~ i, list(i = as.name(x))), data = data)
+# })
+# lapply(models, summary)
+
+# full model 
+lm.full <- lm(W8DINCW~., data)
+summary(lm.full)
+
+# remove non-significant variables in full model + incorrect sign and/or non-sig in UR
+data <- select(data, -c(IndSchool,W1alceverYP,W1bulrc,W1ch16_17HH,W1depkids,W1GrssyrMP,
+                        W1heposs9YP,W1InCarHH,W1truantYP,W1wrkfulldad,W1yschat1,W2depressYP,
+                        W4AlcFreqYP, W4empsYP,W4RacismYP,W6gcse,W8DACTIVITY, W8DGHQSC,W8QDEB2,
+                        W1wrkfullmum,W8DGHQSC_binary))
+
+# remove merged variables 
+data <- select(data, -c(W1hiqualmum,W1hiqualdad,W5Apprent1YP,W5EducYP,
+                        W5JobYP,W6Apprent1YP,W6EducYP,W6JobYP))
+
+#intermediate model 1
+lm.intermediate.1 <- lm(W8DINCW~., data)
+summary(lm.intermediate.1)
+
+# remove non-significant variables (5% level)
+data <- select(data, -c(W1GrssyrHH,W1condur5MP,W1hea2MP,W1NoldBroHS,W1hous12HH,
+                        W1usevcHH,W1empsmum,W1ch0_2HH,W1ch3_11HH,
+                        W1ch12_15HH,W1marstatmum,W1hwndayYP,W2ghq12scr,W4NamesYP,
+                        W6UnivYP,W6acqno,W6als,W8DMARSTAT,W8DACTIVITYC,W8TENURE,
+                        W8QMAFI,JobW5orW6,EducW5orW6,HighestParQual))
+
+# intermediate model 2
+lm.intermediate.2 <- lm(W8DINCW~.,data)
+summary(lm.intermediate.2)
+
+# remove non-significant variables (5% level)
+data <- select(data, -c(W1empsdad,W2disc1YP,W8DWRK))
+
+# advanced model  
+lm.advanced <- lm(W8DINCW~., data)
+summary(lm.advanced)
+
+# diagnostics 
+vif(lm.advanced)
+Anova(lm.advanced)
+
+# residual plots 
+par(mfrow=c(1,3))
+plot(lm.advanced,which=c(1,2))
+hist(lm.advanced$residuals,main="Histogram of residuals",font.main=1,xlab="Residuals")
+
+# try log transform and check diagnostics/residual plots 
+lm.log.transform <- lm(log(W8DINCW)~., data)
+summary(lm.log.transform)
+vif(lm.log.transform)
+Anova(lm.log.transform)
+par(mfrow=c(2,2))
+plot(lm.log.transform,which=c(1,2))
+hist(lm.log.transform$residuals,main="Histogram of residuals",font.main=1,xlab="Residuals")
+
+# try several interactions. None significant @5% 
+lm.interaction.1 <- lm(log(W8DINCW)~.+W4schatYP*W1nssecfam, data)
+summary(lm.interaction.1)
+lm.interaction.2 <- lm(log(W8DINCW)~.+W6OwnchiDV*W8CMSEX, data)
+summary(lm.interaction.2)
+
+## Alternative model with binary W1ethgrpYP and one interaction
+# create W1ethgrpYP_binary
+data.alt <- data
+data.alt$W1ethgrpYP_binary <- with(data.alt,Recode(W1ethgrpYP, "'White'='White';NA=NA;else='non white'"))
+data.alt <- select(data.alt, -W1ethgrpYP)
+lm.alt <- lm(log(W8DINCW)~.+W1ethgrpYP_binary*W8CMSEX, data.alt)
+summary(lm.alt)
+# Interaction term is significant but loss of granularity for W1ethgrpYP. discarded alternative.
+
+# outlier analysis
+show_outliers <- function(the.linear.model, topN) { # length of data
+  n = length(fitted(the.linear.model))
+  # number of parameters estimated
+  p = length(coef(the.linear.model))
+  # standardised residuals over 3
+  res.out <- which(abs(rstandard(the.linear.model)) > 3) #sometimes >2
+  # topN values
+  res.top <- head(rev(sort(abs(rstandard(the.linear.model)))), topN)
+  # high leverage values
+  lev.out <- which(lm.influence(the.linear.model)$hat > 2 * p/n)
+  # topN values
+  lev.top <- head(rev(sort(lm.influence(the.linear.model)$hat)), topN)
+  # high diffits
+  dffits.out <- which(dffits(the.linear.model) > 2 * sqrt(p/n))
+  # topN values
+  dffits.top <- head(rev(sort(dffits(the.linear.model))), topN)
+  # Cook's over 1
+  cooks.out <- which(cooks.distance(the.linear.model) > 1)
+  # topN cooks
+  cooks.top <- head(rev(sort(cooks.distance(the.linear.model))), topN)
+  # Create a list with the statistics -- cant do a data frame as different
+  # lengths
+  list.of.stats <- list(Std.res = res.out, Std.res.top = res.top, Leverage = lev.out,
+                        Leverage.top = lev.top, DFFITS = dffits.out, DFFITS.top = dffits.top,
+                        Cooks = cooks.out, Cooks.top = cooks.top) # return the statistics
+  list.of.stats
+}
+NS.out <- show_outliers(lm.log.transform,5)
+common.out<-intersect(intersect(NS.out$Std.res,NS.out$DFFITS),NS.out$Leverage) 
+common.out
+
+# investigate whether outlying point are mistakes
+data[c(2127,2653),]
+mean(data$W8DINCW)
+# remove outlier from data
+data.out <- data[-c(2127,2653),]
+# model without outlier 
+lm.no.outlier <- lm(log(W8DINCW)~., data.out)
+summary(lm.no.outlier)
+
+# reducing data to complete case 
+data.complete <- data[complete.cases(data), ] 
+
+# cross validation
+for(i in 1:3){
+  #create training/test sets
+  cross.val<-sample(1:nrow(data.complete),0.9*nrow(data.complete) , replace=FALSE)
+  training.set<-data.complete[cross.val,] #the 90% to fit the model
+  test.set<-data.complete[-cross.val,] # the 10% to use as validation sample
+  #fit the model
+  cv.DINCW.lm<-lm(log(W8DINCW)~., data=training.set)
+  #create data frame to use in plots
+  pred.val.set<-data.frame(predicted=predict(cv.DINCW.lm,test.set), 
+  #predicted vs original
+  original=log(test.set$W8DINCW),error=(predict(cv.DINCW.lm,test.set)-log(test.set$W8DINCW)))
+  if(i==1){
+    p1<-ggplot(data=pred.val.set, aes(x=predicted,y=original))+geom_point()
+    #regress one on the other to see "fit"
+    p1<-p1+geom_smooth(method="lm", se=FALSE) 
+    #predicted vs error
+    p2<-ggplot(data=pred.val.set, aes(x=predicted,y=error))+geom_point()
+  }else{
+    #second iteration
+    if(i==2){
+      p1<-p1+geom_point(data=pred.val.set, aes(x=predicted,y=original))
+      #regress one on the other to see "fit"
+      p1<-p1+geom_smooth(method="lm", se=FALSE)
+      #predicted vs error
+      p2<-p2 + geom_point(data=pred.val.set, aes(x=predicted,y=error))
+    }else{
+      p1<-p1+geom_point(data=pred.val.set, aes(x=predicted,y=original))+labs(y="original (log)",x="predicted (log)")
+      p1<-p1+geom_smooth(method="lm", se=FALSE) 
+      p2<-p2 + geom_point(data=pred.val.set, aes(x=predicted,y=error))
+      #lines at 0, +- 1 sd
+      p2<-p2+geom_abline(slope=0,intercept=sd(pred.val.set$error), linetype="dashed",color='red')
+      p2<-p2+geom_abline(slope=0,intercept=0,color='red')
+      p2<-p2+geom_abline(slope=0,intercept=-sd(pred.val.set$error), linetype="dashed",color='red')
+    }}}
+
+grid.arrange(p1,p2, nrow=1, top = "cross validation plots (90/10 split)")
+
+
+# create two vectors to contain the mspe's for each iteration
+in.sample.mse <- rep(NA,100)
+out.sample.mse <- rep(NA,100)
+#repeat 100 times
+for(i in 1:100){
+  cross.val <- sample(1:nrow(data.complete),0.9*nrow(data.complete), replace=FALSE)
+  training.set <- data.complete[cross.val,] 
+  test.set <- data.complete[-cross.val,] 
+  #regression
+  cv.NS.lm <- lm(log(W8DINCW)~., data=training.set)
+  #in sample prediction error
+  in.sample.error = predict(cv.NS.lm,training.set)-log(training.set$W8DINCW)
+  #out of sample prediction error
+  out.sample.error = predict(cv.NS.lm,test.set)-log(test.set$W8DINCW)
+  #in sample mse
+  in.sample.mse[i] <- sum(in.sample.error^2)/length(in.sample.error)
+  #out of sample mse
+  out.sample.mse[i] <- sum(out.sample.error^2)/length(out.sample.error)
+}
+#take the means of the two
+mean(out.sample.mse)
+mean(in.sample.mse)
+
+
+# find range of data 
+with(data, max(log(W8DINCW))-min(log(W8DINCW)))
+
+# write final model and get equation
+lm.final <- lm.log.transform
+summary(lm.final)
+display(lm.final)
+coef <- lm.final$coefficients
+eqn <- paste("E(W8DINCW) =", paste(round(coef[1],2), paste(round(coef[-1],2), names(coef[-1]), sep=" * ", collapse=" + "), sep=" + "))
+eqn <- gsub('\\+ -', '- ', gsub(' \\* ', '*', eqn))
+eqn
+
+# print standardised coefficients 
+lm.beta(lm.final)
+
+# percentage changes 
+changes<-100*(exp(lm.final$coefficients)-1)
+changes <- round(changes,2)
+
+# find range of data 
+with(data, max(log(W8DINCW))-min(log(W8DINCW)))
+
+
+
+
+

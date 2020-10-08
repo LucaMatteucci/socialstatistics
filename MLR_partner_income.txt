@@ -1,0 +1,190 @@
+# W8PUSA regression model 
+
+# run preprocessing code beforehand 
+
+data <- data.processed
+
+summary(data$W8PUSA)
+
+# # exploratory analysis 
+# # write function that plots all features and produces a list
+# exploratory_plots <- function(dt_frm){
+#   col_name <- names(dt_frm)[-1] 
+#   graph_ls <- list()
+#   for (column_name in col_name){
+#     if (sapply(dt_frm, class)[column_name] == 'factor'){
+#       p <- ggplot(data = dt_frm, aes_string(x=column_name, y='log(W8PUSA)')) + geom_boxplot() 
+#       graph_ls[[column_name]] <- p
+#     }else if (sapply(dt_frm, class)[column_name] == 'integer'){
+#       p <- ggplot(data = dt_frm, aes_string(x=column_name, y='log(W8PUSA)')) + geom_point() + geom_smooth(method='lm') 
+#       graph_ls[[column_name]] <- p
+#     }else{
+#       p <- ggplot(data = dt_frm, aes_string(x=column_name, y='log(W8PUSA)')) + geom_point() + geom_smooth(method='lm') 
+#       graph_ls[[column_name]] <- p
+#     }
+#   }
+#   return(graph_ls) }
+# 
+# 
+# # write function that returns grid with 4 plots 
+# set_plot <- function(plot_ls, start_n = 1){
+#   number_plot <- min(4, 1+length(plot_ls)-start_n) 
+#   if (number_plot == 4){
+#     grid.arrange(plot_ls[[start_n]], plot_ls[[start_n+1]], plot_ls[[start_n+2]], plot_ls[[start_n+3]], nrow=2) 
+#   }
+#   else if (number_plot == 3){
+#     grid.arrange(plot_ls[[start_n]], plot_ls[[start_n+1]], plot_ls[[start_n+2]], nrow=2) 
+#   }
+#   else if (number_plot == 2){
+#     grid.arrange(plot_ls[[start_n]], plot_ls[[start_n+1]], nrow=1) 
+#   }
+#   else if (number_plot ==1){
+#     grid.arrange(plot_ls[[start_n]], nrow=2) 
+#   }
+#   else{print('start_n is over the length of input list') 
+#   }
+# }
+# 
+# # produce plots
+# ls <- exploratory_plots(data)
+# for (i in seq(1,80, by=4)){
+#   set_plot(ls, i) 
+# }
+
+# remove NAs in outcome var
+data <- subset(data, W8PUSA!='NA')
+length(data$W8PUSA)
+
+# initial model
+lm.initial <- lm(W8PUSA~W1GrssyrHH+W1wrk1aMP+IndSchool+W1ethgrpYP+W1disabYP+W2disc1YP+
+                W6UnivYP+W6OwnchiDV+W8DDEGP+W8NETA+W8DWRK+W8CMSEX+W8QMAFI+W8TENURE+
+                W1nssecfam+HighestParQual, data)
+summary(lm.initial)
+
+# encode 0s as 1s for log transformation (-inf otherwise)
+data$W8PUSA <- ifelse(data$W8PUSA == 0, 1,data$W8PUSA)
+
+# initial model with log
+lm.initial.log <- lm(log(W8PUSA)~W1GrssyrHH+W1wrk1aMP+IndSchool+W1ethgrpYP+W1disabYP+W2disc1YP+
+                   W6UnivYP+W6OwnchiDV+W8DDEGP+W8NETA+W8DWRK+W8CMSEX+W8QMAFI+W8TENURE+
+                   W1nssecfam+HighestParQual, data)
+summary(lm.initial.log)
+
+# model after iterated backward elimination and arbitrary experimentation
+lm.advanced  <- lm(log(W8PUSA)~W1GrssyrHH+W6UnivYP+W6OwnchiDV+W8NETA, data)
+summary(lm.advanced)
+
+# diagnostics
+vif(lm.advanced)
+Anova(lm.advanced)
+
+# residual plots 
+par(mfrow=c(2,2))
+plot(lm.advanced,which=c(1,2))
+hist(lm.advanced$residuals,main="Histogram of residuals",font.main=1,xlab="Residuals")
+
+# subset partnered individuals and replicate steps
+dim(data)
+data.partnered <- subset(data,W8DMARSTAT == "legally partnered")
+dim(data.partnered)
+lm.advanced.2  <- lm(log(W8PUSA)~W1GrssyrHH+W6UnivYP+W8NETA+W6OwnchiDV, data.partnered)
+summary(lm.advanced.2)
+vif(lm.advanced.2)
+Anova(lm.advanced.2)
+par(mfrow=c(2,2))
+plot(lm.advanced.2,which=c(1,2))
+hist(lm.advanced.2$residuals,main="Histogram of residuals",font.main=1,xlab="Residuals")
+
+#notice close to zero coefficients for W1GrssyrHH and W8NETA: take log
+lm.advanced.3  <- lm(log(W8PUSA)~log(W1GrssyrHH)+W6UnivYP+log(W8NETA)+W6OwnchiDV, data.partnered)
+summary(lm.advanced.3)
+
+#fit final model without W6OwnchiDV
+lm.final.PUSA <- lm(log(W8PUSA)~log(W1GrssyrHH)+W6UnivYP+log(W8NETA), data.partnered)
+display(lm.final.PUSA)
+vif(lm.final.PUSA)
+par(mfrow=c(1,3))
+plot(lm.final.PUSA,which=c(1,2))
+hist(lm.final.PUSA$residuals,main="Histogram of residuals",font.main=1,xlab="Residuals")
+
+# no outliers found 
+
+# cross validation 
+
+# reducing data to complete case 
+data.final <- data.partnered[,c('W1GrssyrHH','W6UnivYP','W8NETA','W8PUSA')]
+dim(data.final)
+data.complete <- data.final[complete.cases(data.final), ] 
+dim(data.complete)
+
+for(i in 1:3){
+#create training/test sets
+cross.val<-sample(1:nrow(data.complete),0.8*nrow(data.complete) , replace=FALSE)
+training.set<-data.complete[cross.val,] #the 80% to fit the model
+test.set<-data.complete[-cross.val,] # the 20% to use as validation sample
+#fit the model
+cv.PUSA.lm<-lm(log(W8PUSA)~log(W1GrssyrHH)+W6UnivYP+log(W8NETA), data=training.set)
+#create data frame to use in plots
+pred.val.set<-data.frame(predicted=predict(cv.PUSA.lm,test.set), 
+#predicted vs original
+original=log(test.set$W8PUSA),error=(predict(cv.PUSA.lm,test.set)-log(test.set$W8PUSA)))
+#first iteration
+if(i==1){
+  p1<-ggplot(data=pred.val.set, aes(x=predicted,y=original))+geom_point()
+  #regress one on the other to see "fit"
+  p1<-p1+geom_smooth(method="lm", se=FALSE) 
+  #predicted vs error
+  p2<-ggplot(data=pred.val.set, aes(x=predicted,y=error))+geom_point()
+  }else{
+    #second iteration
+    if(i==2){
+    p1<-p1+geom_point(data=pred.val.set, aes(x=predicted,y=original))
+    #regress one on the other to see "fit"
+    p1<-p1+geom_smooth(method="lm", se=FALSE)
+    #predicted vs error
+    p2<-p2 + geom_point(data=pred.val.set, aes(x=predicted,y=error))
+    }else{
+      p1<-p1+geom_point(data=pred.val.set, aes(x=predicted,y=original))
+      p1<-p1+geom_smooth(method="lm", se=FALSE) 
+      p2<-p2 + geom_point(data=pred.val.set, aes(x=predicted,y=error))
+#lines at 0, +- 1 sd
+p2<-p2+geom_abline(slope=0,intercept=sd(pred.val.set$error), linetype="dashed", color='red')
+p2<-p2+geom_abline(slope=0,intercept=0,color='red')
+p2<-p2+geom_abline(slope=0,intercept=-sd(pred.val.set$error), linetype="dashed",color='red')
+#ideal line
+p1<-p1+geom_abline(slope=1,intercept=0, linetype="dashed")
+}}}
+grid.arrange(p1,p2, nrow=1, top = "cross validation plots (80/20 split)")
+
+# create two vectors to contain the mspe's for each iteration
+in.sample.mse <- rep(NA,100)
+out.sample.mse <- rep(NA,100)
+#repeat 100 times
+for(i in 1:100){
+  cross.val <- sample(1:nrow(data.complete),0.9*nrow(data.complete), replace=FALSE)
+  training.set <- data.complete[cross.val,] 
+  test.set <- data.complete[-cross.val,] 
+  #regression
+  cv.PUSA.lm<-lm(log(W8PUSA)~log(W1GrssyrHH)+W6UnivYP+log(W8NETA), data=training.set)
+  #in sample prediction error
+  in.sample.error = predict(cv.PUSA.lm,training.set)-log(training.set$W8PUSA)
+  #out of sample prediction error
+  out.sample.error = predict(cv.PUSA.lm,test.set)-log(test.set$W8PUSA)
+  #in sample mse
+  in.sample.mse[i] <- sum(in.sample.error^2)/length(in.sample.error)
+  #out of sample mse
+  out.sample.mse[i] <- sum(out.sample.error^2)/length(out.sample.error)
+}
+#take the means of the two
+mean(out.sample.mse)
+mean(in.sample.mse)
+
+
+#graph
+# ggplot(data.partnered,aes(x=W8PUSA))+geom_histogram() +
+#   scale_x_log10(breaks = trans_breaks("log10", function(x) 10^x), labels = scales::unit_format(unit="£"))
+
+
+#range 
+with(data.partnered, max(log(W8PUSA))-min(log(W8PUSA)))
+
